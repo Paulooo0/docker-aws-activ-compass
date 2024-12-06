@@ -30,6 +30,26 @@ Nas route tables nós temos uma tabela para cada subnet, a tabela pública é co
 
 Isso é importante para manter o isolamento das instâncias e do banco de dados
 
+#### Security groups
+Foram criados 3 security groups, um para a trafego externo, um para trafego entre o load balancer e a instância EC2, e um para trafego entre a instância e o RDS. Abaixo está cada um deles:
+
+**ActivDockerAws - external (Load Balancer)**
+
+<p><img src="./images/image3.png"></p>
+<p><img src="./images/image4.png"></p>
+
+**ActivDockerAws - app (EC2)**
+
+<p><img src="./images/image5.png"></p>
+<p><img src="./images/image6.png"></p>
+
+**ActivDockerAws - MySQL (RDS)**
+
+<p><img src="./images/image7.png"></p>
+<p><img src="./images/image8.png"></p>
+
+---
+
 ### 1. instalação e configuração do DOCKER ou CONTAINERD no host EC2
 
 <h3>2. Efetuar Deploy de uma aplicação Wordpress com:<br>
