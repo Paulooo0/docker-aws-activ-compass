@@ -1,13 +1,13 @@
-<h1 align="center">Atividade AWS - Docker</h1>
+<h1 align="center">Atividade Docker e AWS</h1>
 
 <p align="center">
-Atividade na qual deve ser criada uma aplicação baseada na arquiterura proposta, dentro da nuvem AWS e com foco no uso do Docker.
+Atividade na qual deve ser criada uma aplicação baseada na arquitetura proposta, dentro da nuvem AWS e com foco no uso do Docker.
 </p>
 
-<p align="center"><img src="./title-image.png"></p>
+<p align="center"><img src="./images/title-image.png"></p>
 
 ## Arquitetura proposta
-<p align=center><img src="./image1.png"></p>
+<p align=center><img src="./images/image1.png"></p>
 Obeservando a imagem à cima, é possível determinar os requerimentos da arquitetura, que são estes:
 
 1. VPC
@@ -22,9 +22,13 @@ Como pode ser visto na arquitetura, será necessário criar o alicerce para que 
 
 O que deve ser criado antes de tudo é a VPC, que será a base para montarmos um sistema de redes. Abaixo está o esquema de subnets, route tables e gateways:
 
-<p align=center><img src="./image2.png"></p>
+<p align=center><img src="./images/image2.png"></p>
 
-Aqui temos duas subnets, uma para cada availability zone, sendo uma privada e uma publica para cada. Nas route tables nós temos uma tabela para cada subnet, as públicas servirão de acesso ao Load Balancer, enquanto as privadas serão para trafego interno, assim como pode ser observado na arquitetura.
+Aqui temos 6 subnets, são 3 para cada availability zone. Sendo uma pública para o Load balancer, uma privada para a instância EC2, e uma privada para o RDS.
+
+Nas route tables nós temos uma tabela para cada subnet, a tabela pública é compartilhada entre as duas subnets públicas, que servirão de acesso para o Load Balancer, enquanto as privadas serão para trafego interno, assim como pode ser observado na arquitetura.
+
+Isso é importante para manter o isolamento das instâncias e do banco de dados
 
 ### 1. instalação e configuração do DOCKER ou CONTAINERD no host EC2
 
