@@ -4,9 +4,9 @@
 Atividade na qual deve ser criada uma aplicação baseada na arquiterura proposta, dentro da nuvem AWS e com foco no uso do Docker.
 </p>
 
-<div style="display: flex; justify-content: center;">
-  <img src="./title-image.png" style="mix-blend-mode: multiply">
-</div>
+<p align="center">
+  <img src="./title-image.png">
+</p>
 
 ## Arquitetura proposta
 <img src="./image1.png">
