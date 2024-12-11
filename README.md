@@ -28,28 +28,6 @@ Aqui temos 2 subnets, 1 para cada availability zone. Para transferencia de dados
 
 Ambas estão ligadas à tabela de rotas, que por sua vez está conectada ao internet gateway para possibilitar tráfego com a internet
 
-#### Security groups
-Foram criados 3 security groups, um para a trafego externo, um para trafego entre o load balancer e a instância EC2, e um para trafego entre a instância e o RDS. Abaixo está cada um deles:
-
-* **ActivDockerAws (Load Balancer)**
-
-<div align="center"><img src="./images/image3.png"></div>
-<div align="center"><img src="./images/image4.png"></div>
-
-* **ActivDockerAws-server (EC2)**
-
-<div align="center"><img src="./images/image5.png"></div>
-<div align="center"><img src="./images/image6.png"></div>
-
-* **ActivDockerAws-MySQL (RDS)**
-
-********** ***TODO*** ************
-
-<div align="center"><img src="./images/image7.png"></div>
-<div align="center"><img src="./images/image8.png"></div>
-
-********** ***TODO*** ************
-
 ---
 
 ### 1. instalação e configuração do DOCKER ou CONTAINERD no host EC2
@@ -72,9 +50,6 @@ Para automatizar a instação do Docker e a inicialização do conteiner do Word
 ```bash
 #!/bin/bash
 
-sudo yum update -y
-
-sudo amazon-linux-extras enable docker
 sudo yum install docker -y
 
 sudo systemctl start docker
@@ -82,9 +57,11 @@ sudo systemctl enable docker
 
 sudo usermod -aG docker ec2-user
 
-cat <<EOF > compose.yml
-version: '3.1'
+sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
 
+sudo chmod +x /usr/local/bin/docker-compose
+
+cat <<EOF > /home/ec2-user/compose.yml
 services:
 
   wordpress:
@@ -93,41 +70,66 @@ services:
     ports:
       - 80:80
     environment:
-      WORDPRESS_DB_HOST: activdockeraws-1
+      WORDPRESS_DB_HOST: activdockeraws-1.crwgcqugmfcm.us-east-1.rds.amazonaws.com
       WORDPRESS_DB_USER: admin
-      WORDPRESS_DB_PASSWORD: 5ggMlbY18oUTWKt
-      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_PASSWORD: Uj9b2qApzt89F8w7hL7d
+      WORDPRESS_DB_NAME: activdockeraws
     volumes:
-      - wordpress:/var/www/html
-
-volumes:
-  wordpress:
+      - ./efs:/var/www/html
 EOF
 
-sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+sudo mkdir efs
 
-sudo chmod +x /usr/local/bin/docker-compose
+sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport fs-022330e490e708d36.efs.us-east-1.amazonaws.com:/ efs
 
-docker-compose up
+docker-compose -f /home/ec2-user/compose.yml up -d
 ```
+Este script faz as seguintes tarefas:
+1. Instala o `Docker`
+2. Inicializa o `Docker`
+3. Adiciona o usuário `ec2-user` ao grupo `docker`
+4. Instala o `docker-compose`
+5. Dá permissão de execução para o `docker-compose`
+6. Cria o `compose.yml`, que contém as instruções para subir o container do `Wordpress`
+7. Cria o diretório de montagem para o `EFS`
+8. Realiza a montagem do volume do `EFS` que será acessado pelo `Wordpress`
+9. Executa o `docker-compose`, subindo o container do `Wordpress` na porta 80
 
-A arquitetura propõe o uso de uma instância para cada availability zone, por isso deve ser usado um modelo de instância, em vez de criar as instâncias diretamente, o trabalho de subir as instâncias será atribuído ao auto scaling group. As instâncias são idênticas, com a única diferença sendo a availability zone e a respectiva subnet que está atrelada àquela availability zone.
-
+---
 
 <h3>2. Efetuar Deploy de uma aplicação Wordpress com:<br>
 • container de aplicação<br>
-• RDS database Mysql<h3>
+• RDS database Mysql</h3>
 
-O deploy do container de aplicação é efetuado assim que a instância entra em execução, assim como está descrito no script que foi atribuído aos dados do usuário.
+O deploy do container de aplicação é efetuado assim que a instância entra em execução, aqui estão os logs do `Wordpress` recém criado.
 
-<div align="center"><img src="./images/image9.png"></div>
+<div align="center"><img src="./images/image3.png"></div>
 
-******** ***TODO*** ********
+**RDS database com MySQL**
 
-**RDS**
+<div align="center"><img src="./images/image4.png"></div>
 
-******** ***TODO*** ********
+**Realizando a conexão com algumas EC2**
 
-### 3. configuração da utilização do serviço EFS AWS para arquivos estáticos do container de aplicação Wordpress
+<div align="center"><img src="./images/image5.png"></div>
+
+### 3. Configuração da utilização do serviço EFS AWS para arquivos estáticos do container de aplicação Wordpress
+
+**Elastic FIle System (EFS)**
+<div align="center"><img src="./images/image6.png"></div>
+
+Para anexar o `EFS`, basta utilizar o comando de montagem na instância `EC2`. Neste caso, foi utilizado o cliente do NFS. Para que possa ser montado o volume, é preciso que o diretório alvo já exista e tenha as permissões necessárias para tal.
+
+<div align="center"><img src="./images/image7.png"></div>
+
+No script fornecido para a inicialização da EC2, o volume do `Wordpress` já havia sido direcionado para o diretório de montagem do `EFS`.
+
+Para conferir a conexão entre o `Wordpress` e o `EFS`, basta apenas checar as métricas do `EFS`.
+
+<div align="center"><img src="./images/image8.png"></div>
+
+Aqui podemos ver nas métricas do `EFS`, que foi realizada uma conexão, e essa conexão foi justamente a `EC2` que contém o conteiner do `Wordpress`
 
 ### 4. configuração do serviço de Load Balancer AWS para a aplicação Wordpress
+
+*** ***TODO*** ***
