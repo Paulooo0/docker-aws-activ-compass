@@ -118,7 +118,7 @@ O deploy do container de aplicação é efetuado assim que a instância entra em
 **Elastic FIle System (EFS)**
 <div align="center"><img src="./images/image6.png"></div>
 
-Para anexar o `EFS`, basta utilizar o comando de montagem na instância `EC2`. Neste caso, foi utilizado o cliente do NFS. Para que possa ser montado o volume, é preciso que o diretório alvo já exista e tenha as permissões necessárias para tal.
+Para anexar o `EFS`, basta utilizar o comando de montagem na instância `EC2`. Neste caso, foi utilizado o cliente do NFS.
 
 <div align="center"><img src="./images/image7.png"></div>
 
@@ -129,6 +129,17 @@ Para conferir a conexão entre o `Wordpress` e o `EFS`, basta apenas checar as m
 <div align="center"><img src="./images/image8.png"></div>
 
 Aqui podemos ver nas métricas do `EFS`, que foi realizada uma conexão, e essa conexão foi justamente a `EC2` que contém o conteiner do `Wordpress`
+
+Uma outra maneira mais interessante de checar o funcionamento do `EFS` é criando um arquivo em uma instância `EC2`, e ver se o arquivo também foi criado na montagem de outra `EC2`
+
+```bash
+sudo touch /mnt/efs/test-file
+```
+**EC2 1**
+<div align="center"><img src="./images/image9.png"></div>
+
+**EC2 2**
+<div align="center"><img src="./images/image10.png"></div>
 
 ### 4. configuração do serviço de Load Balancer AWS para a aplicação Wordpress
 
