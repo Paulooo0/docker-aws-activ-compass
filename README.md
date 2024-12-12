@@ -39,7 +39,7 @@ Primeiramente, devem ser criadas as instâncias EC2, que partirão de um modelo 
 
 |                   	|                      	|
 |-------------------	|----------------------	|
-|        AMI        	| Amazon Linux 2       	|
+|        AMI        	| Amazon Linux 2023    	|
 | Tipo de instância 	| t2.micro             	|
 | Security group    	| ActivDockerAws-server |
 | Armazenamento     	| 1 volume(s) - 8 GiB  	|
@@ -75,12 +75,12 @@ services:
       WORDPRESS_DB_PASSWORD: Uj9b2qApzt89F8w7hL7d
       WORDPRESS_DB_NAME: activdockeraws
     volumes:
-      - ./efs:/var/www/html
+      - /mnt/efs:/var/www/html
 EOF
 
-sudo mkdir efs
+sudo mkdir -p /mnt/efs
 
-sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport fs-022330e490e708d36.efs.us-east-1.amazonaws.com:/ efs
+sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport fs-022330e490e708d36.efs.us-east-1.amazonaws.com:/ /mnt/efs
 
 docker-compose -f /home/ec2-user/compose.yml up -d
 ```
