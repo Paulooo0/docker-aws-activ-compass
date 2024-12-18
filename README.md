@@ -257,4 +257,4 @@ Agora o `DNS` de novos `Load Balancers` serão atribuídos às URLs do Wordpress
 
 **Finalização**
 
-Após todos executados todos estes passos, temos uma aplicação `Wordpress` resiliente e escalável, com servidores em múltiplas zonas de disponibilidade, telorância à falhas, balanceamento de carga, banco de dados elástico e sistema de arquivos em nuvem
+Após executar todos estes passos, temos uma aplicação `Wordpress` resiliente e escalável, com servidores em múltiplas zonas de disponibilidade, telorância à falhas, balanceamento de carga, banco de dados elástico e sistema de arquivos em nuvem
