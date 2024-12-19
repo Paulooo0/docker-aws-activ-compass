@@ -45,7 +45,7 @@ Primeiramente, devem ser criadas as instâncias EC2, que partirão de um modelo 
 |-------------------	|----------------------	|
 |        AMI        	| Amazon Linux 2023    	|
 | Tipo de instância 	| t2.micro             	|
-| Security group    	| ActivDockerAws-server |
+| Security group    	| ec2                   |
 | Armazenamento     	| 1 volume(s) - 8 GiB  	|
 
 </div>
@@ -89,7 +89,7 @@ EOF
 
 sudo mkdir -p /mnt/efs
 
-sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport fs-022330e490e708d36.efs.us-east-1.amazonaws.com:/ /mnt/efs
+sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport <EFS_ID>.efs.us-east-1.amazonaws.com:/ /mnt/efs
 
 docker-compose -f /app/compose.yml up -d
 ```
@@ -123,17 +123,17 @@ O deploy do container de aplicação é efetuado assim que a instância entra em
 Garanta que os security groups das `EC2` e do `RDS` estão bem configurados:
 
 * EC2:
+  * nome: ec2-rds
   * outbound:
-    * nome: ec2-rds-1
     * tipo: MYSQL/Aurora
     * porta: 3306
-    * destino: rds-ec2-1
+    * destino: rds-ec2
 * RDS:
+  * nome: rds-ec2
   * inbound:
-    * nome: rds-ec2-1
     * tipo: MYSQL/Aurora
     * porta: 3306
-    * destino: ec2-rds-1
+    * destino: ec2-rds
 
 **RDS conectado com as EC2**
 
@@ -159,14 +159,14 @@ Para anexar o `EFS`, basta utilizar o comando de montagem na instância `EC2`. N
 Assim como no `RDS`, garanta que os security groups das `EC2` e do `EFS` estejam bem configurados.
 
 * EC2:
+  * nome: ec2-efs-1
   * outbound:
-    * nome: ec2-efs-1
     * tipo: NFS
     * porta: 2049
     * destino: efs-ec2-1
 * EFS:
+  * nome: efs-ec2-1
   * inbound:
-    * nome: efs-ec2-1
     * tipo: NFS
     * porta: 2049
     * destino: ec2-efs-1
@@ -199,17 +199,123 @@ Com a aplicação `Wordpress` rodando e corretamente integrada ao RDS e EFS, che
 **Resumo do Load Balancer**
 <div align="center"><img src="./images/image11.png"></div>
 
+Atenção aos security groups do `Load Balancer` e das instâncias `EC2`, após a criação do `Load Balancer`, os security groups devem estar desta forma:
+* Load Balancer:
+  * nome: loadbalancer
+  * inbound:
+    * regra 1:
+      * tipo: HTTP
+      * porta: 80
+      * destino: 0.0.0.0/0
+    * regra 2:
+      * tipo: HTTPS
+      * porta: 443
+      * destino: 0.0.0.0/0
+  * outbound:
+    * regra 1:
+      * tipo: HTTP
+      * porta: 80
+      * destino: ec2
+    * regra 2:
+      * tipo: HTTPS
+      * porta: 443
+      * destino: ec2
+
+* EC2:
+  * nome: ec2
+  * inbound:
+    * regra 1:
+      * tipo: HTTP
+      * porta: 80
+      * destino: loadbalancer
+    * regra 2:
+      * tipo: HTTPS
+      * porta: 443
+      * destino: loadbalancer
+  * outbound:
+    * regra 1:
+      * tipo: HTTP
+      * porta: 80
+      * destino: 0.0.0.0/0
+    * regra 2:
+      * tipo: HTTPS
+      * porta: 443
+      * destino: 0.0.0.0/0
+
+
 **Health check**
 
 O Load Balancer que foi utilizado é o `Classic Load Balancer`, que checa a integridade das instâncias recebendo um código 200 de uma requisição http no endpoint especificado, porém a aplicação `Wordpress` retorna uma requisição de código 302, que é um redirecionamento.
 
-Para corrigir isso é muito simples, basta acessar o container do `Wordpress` utilizando `docker exec -it <CONTAINER_ID>` e criar um endpoint para ser o nosso `healthcheck`, que deve retornar código 200 na verificação.
+Para corrigir isso é muito simples, basta acessar o container do `Wordpress` utilizando `docker exec -it <CONTAINER_ID>` e criar um endpoint para ser o nosso `health check`, que deve retornar código 200 na verificação.
 
 Primeiramente devemos subir e acessar uma das instâncias EC2, e utilizar o comando `docker ps` para pegar o código do container Wordpress. Então acessamos o container e vemos o conteúdo dele
 
 <div align="center"><img src="./images/image12.png"></div>
 
-Adicionamos o código do endpoint do `healthcheck` utilizando `cat <<EOF >`
+Para inserir o codigo do `health check`, será necessário um editor de código, e como um container Docker precisa ser enxuto, logo ele originalmente não possui nenhum editor, então será preciso instalar um.
+
+Para instalar o `vim`, utilize os comandos:
+```bash
+apt update -y
+apt install vim -y
+```
+
+Após instalar o `vim`, adicionaremos o código do endpoint que realizará o `health check`, utilizando o comando `vim healthcheck.php` e inserindo o código abaixo:
+```php
+<?php
+define('WORDPRESS_CONFIG', __DIR__ . DIRECTORY_SEPARATOR . 'wp-config.php');
+define('WORDPRESS_DIRECTORY', __DIR__ . DIRECTORY_SEPARATOR . 'wordpress');
+define('WP_CONTENT_DIRECTORY', __DIR__ . DIRECTORY_SEPARATOR . 'wp-content');
+
+
+$_healthCheckStatus = true;
+$_healthCheckCompleted = false;
+
+try {
+    do {
+        if (!file_exists(WORDPRESS_CONFIG)) {
+            $_healthCheckStatus = false;
+        }
+
+        $_healthCheckStatus = _dirIsValidAndNotEmpty(WORDPRESS_DIRECTORY);
+        $_healthCheckStatus = _dirIsValidAndNotEmpty(WP_CONTENT_DIRECTORY);
+
+        $_healthCheckCompleted = true;
+    } while (false === $_healthCheckCompleted && true === $_healthCheckStatus);
+} catch (\Exception $e) {
+    $_healthCheckStatus = false;
+}
+
+if (false === $_healthCheckStatus) {
+    header("HTTP/1.0 404 Not Found");
+    ?>
+    <html>
+    <body><h1>Health is bad</h1></body>
+    </html>
+    <?php
+    die();
+} else {
+    ?>
+    <html>
+    <body><h1>Health appears good</h1></body>
+    </html>
+    <?php
+}
+
+function _dirIsValidAndNotEmpty($dir) {
+    if (is_dir($dir)) {
+        $_dirIsNotEmpty = (new \FilesystemIterator($dir))->valid();
+        if ($_dirIsNotEmpty) {
+            return true;
+        }
+    }
+
+    return false;
+}
+```
+
+Este código checa a integridade da apicação conferindo os arquivos do `Wordpress`. Se o `Wordpress` não for instalado, então ele retornará o código `404 Not Found` em loop, até encontrar os arquivos de configuração, assim retornando um código `200 OK` na requisição
 
 <div align="center"><img src="./images/image13.png"></div>
 
@@ -260,15 +366,7 @@ docker exec -it <CONTAINER_ID> bash
 
 Utilizando o comando `ls` será listado os arquivos do `Wordpress`, incluindo o `healthcheck.php` criado anteriormente. O arquivo importante aqui é o `wp-config.php`.
 
-Para alterá-lo, será necessário um editor de código, como um container Docker precisa ser enxuto, logo ele originalmente não possui nenhum editor, então será preciso instalar um.
-
-Para instalar o `vim`, utilize os comandos:
-```bash
-apt update -y
-apt install vim -y
-```
-
-Acesse o arquivo `wp-config.php` com o comando `vim wp-config.php`. É importante que ele seja acessado por um editor de código e não simplesmente sobrescrito utilizando `echo` ou `cat <<EOF >`, pois estes comandos leem alguns valores do código como variáveis de ambiente do sistema, e assim quebrando o código.
+Acesse o arquivo `wp-config.php` com o comando `vim wp-config.php` (se estiver utilizando uma nova instância, instale o `vim` novamente seguindo os passos da sessão de `Health Check`). É importante que o arquivo seja acessado por um editor de código e não simplesmente sobrescrito utilizando `echo` ou `cat <<EOF >`, pois estes comandos leem alguns valores do código como variáveis do sistema, e assim quebrando o código.
 
 Dentro o arquivo, localize o comentário `/* That's all, stop editing! Happy publishing. */`. Acima deste comentário, escreva o seguinte código:
 ```php
