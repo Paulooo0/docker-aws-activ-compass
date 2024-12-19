@@ -30,6 +30,8 @@ As `subnets` estão ligadas em suas respectivas `tabelas de rotas`.
 
 A tabela de rotas pública está associada ao `Internet Gateway`, para que o `Load Balancer` possa ter acesso à internet. E a tabela de rotas privada está associada ao `NAT Gateway`, para rotear acesso à internet para as instâncias `EC2`, que estão em subnets privadas.
 
+O `NAT Gateway` precisa estar associado à uma `subnet pública` e possuir um `IP Elástico` para funcionar corretamente.
+
 ---
 
 ### 1. instalação e configuração do DOCKER ou CONTAINERD no host EC2
@@ -77,10 +79,10 @@ services:
     ports:
       - 80:80
     environment:
-      WORDPRESS_DB_HOST: activdockeraws-1.crwgcqugmfcm.us-east-1.rds.amazonaws.com
-      WORDPRESS_DB_USER: admin
-      WORDPRESS_DB_PASSWORD: Uj9b2qApzt89F8w7hL7d
-      WORDPRESS_DB_NAME: activdockeraws
+      WORDPRESS_DB_HOST: <RDS_ENDPOINT>
+      WORDPRESS_DB_USER: <RDS_USER>
+      WORDPRESS_DB_PASSWORD: <RDS_PASSWORD>
+      WORDPRESS_DB_NAME: <RDS_DATABASE>
     volumes:
       - /mnt/efs:/var/www/html
 EOF
@@ -118,6 +120,21 @@ O deploy do container de aplicação é efetuado assim que a instância entra em
 
 <div align="center"><img src="./images/image4.png"></div>
 
+Garanta que os security groups das `EC2` e do `RDS` estão bem configurados:
+
+* EC2:
+  * outbound:
+    * nome: ec2-rds-1
+    * tipo: MYSQL/Aurora
+    * porta: 3306
+    * destino: rds-ec2-1
+* RDS:
+  * inbound:
+    * nome: rds-ec2-1
+    * tipo: MYSQL/Aurora
+    * porta: 3306
+    * destino: ec2-rds-1
+
 **RDS conectado com as EC2**
 
 <div align="center"><img src="./images/image5.png"></div>
@@ -139,7 +156,22 @@ Para anexar o `EFS`, basta utilizar o comando de montagem na instância `EC2`. N
 
 <div align="center"><img src="./images/image7.png"></div>
 
-No script fornecido para a inicialização da EC2, o volume do `Wordpress` já havia sido direcionado para o diretório de montagem do `EFS`.
+Assim como no `RDS`, garanta que os security groups das `EC2` e do `EFS` estejam bem configurados.
+
+* EC2:
+  * outbound:
+    * nome: ec2-efs-1
+    * tipo: NFS
+    * porta: 2049
+    * destino: efs-ec2-1
+* EFS:
+  * inbound:
+    * nome: efs-ec2-1
+    * tipo: NFS
+    * porta: 2049
+    * destino: ec2-efs-1
+
+No script fornecido para a inicialização da `EC2`, o volume do `Wordpress` já havia sido direcionado para o diretório de montagem do `EFS`.
 
 Para conferir a conexão entre o `Wordpress` e o `EFS`, basta apenas checar as métricas do `EFS`.
 
@@ -171,13 +203,13 @@ Com a aplicação `Wordpress` rodando e corretamente integrada ao RDS e EFS, che
 
 O Load Balancer que foi utilizado é o `Classic Load Balancer`, que checa a integridade das instâncias recebendo um código 200 de uma requisição http no endpoint especificado, porém a aplicação `Wordpress` retorna uma requisição de código 302, que é um redirecionamento.
 
-Para corrigir isso é muito simples, basta criar um endpoint para ser o nosso `healthcheck`, que deve retornar código 200 na verificação.
+Para corrigir isso é muito simples, basta acessar o container do `Wordpress` utilizando `docker exec -it <CONTAINER_ID>` e criar um endpoint para ser o nosso `healthcheck`, que deve retornar código 200 na verificação.
 
 Primeiramente devemos subir e acessar uma das instâncias EC2, e utilizar o comando `docker ps` para pegar o código do container Wordpress. Então acessamos o container e vemos o conteúdo dele
 
 <div align="center"><img src="./images/image12.png"></div>
 
-Adicionamos o código do endpoint do `healthcheck`
+Adicionamos o código do endpoint do `healthcheck` utilizando `cat <<EOF >`
 
 <div align="center"><img src="./images/image13.png"></div>
 
@@ -221,7 +253,7 @@ Passados alguns minutos, retornamos ao `Load Balancer` e conferimos as instânci
 
 O `Wordpress` armazena o host name do `Load Balancer` quando ele é instalado, e redireciona as requisições para este host name, como o endpoint de `/login` por exemplo. Se o `Load Balancer` não possuir um domínio, então o seu host name será o DNS fornecido pela `AWS`. Porém se o `Load Balancer` original for derrubado, e criado um novo, o `Wordpress` continuará redirecionando para o DNS antigo, pois ele foi salvo como o host name nas configurações do `Wordpress`.
 
-Para corrigir isso, deve ser utilizado o `bastion host` para acessar qualquer `EC2` da aplicação. Uma vez acessado, deve ser acessado o `container Docker` a partir do seguinte comando
+Para corrigir isso, deve ser utilizado o `bastion host` para acessar qualquer `EC2` da aplicação. Uma vez acessado, deve ser acessado o `container Docker` a partir do seguinte comando:
 ```bash
 docker exec -it <CONTAINER_ID> bash
 ```
@@ -247,7 +279,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 ```
 
 Salve e saia do arquivo, utilize `cat wp-config.php` para conferir se está correto. 
-Este código checa o host name da requisição HTTP, e se foi alterado, ele atribui o novo host name na URL do frontend do `Wordpress` (WP_HOME) e na URL da instalação do `Wordpress` (WP_SITEURL)
+Este código checa o host name da requisição HTTP, e se foi alterado, ele atribui o novo host name na URL do frontend do `Wordpress` (WP_HOME) e na URL da instalação do `Wordpress` (WP_SITEURL).
 
 Após isso, saia e reinicie o container.
 
@@ -257,4 +289,4 @@ Agora o `DNS` de novos `Load Balancers` serão atribuídos às URLs do Wordpress
 
 **Finalização**
 
-Após executar todos estes passos, temos uma aplicação `Wordpress` resiliente e escalável, com servidores em múltiplas zonas de disponibilidade, telorância à falhas, balanceamento de carga, banco de dados elástico e sistema de arquivos em nuvem
+Após executar todos estes passos, temos uma aplicação `Wordpress` resiliente e escalável, com servidores em múltiplas zonas de disponibilidade, telorância à falhas, balanceamento de carga, banco de dados elástico e sistema de arquivos em nuvem.
