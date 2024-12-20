@@ -133,7 +133,7 @@ Garanta que os security groups das `EC2` e do `RDS` estão bem configurados:
   * inbound:
     * tipo: MYSQL/Aurora
     * porta: 3306
-    * destino: ec2-rds
+    * origem: ec2-rds
 
 **RDS conectado com as EC2**
 
@@ -141,9 +141,49 @@ Garanta que os security groups das `EC2` e do `RDS` estão bem configurados:
 
 **Bastion Host**
 
-Caso haja algum problema dentro das instâncias, deve ser criado um `bastion host`. Um bastion host nada mais é do que uma intância com acesso público, que será a intermediadora para realizar o acesso via `SSH` às `EC2` da aplicação, que por sua vez estão protegidas em `subnets privadas`.
+Caso haja algum problema dentro das instâncias, deve ser criado um `bastion host`. Um `bastion host` nada mais é do que uma intância com acesso público, que será a intermediadora para realizar o acesso via `SSH` às `EC2` da aplicação, que por sua vez estão protegidas em `subnets privadas`.
 
 É importante salientar que o `bastion host` deve ter todas as precauções de segurança, visto que ele está exposto para acesso externo. Então utilize as melhores práticas de segurança para não tornar o `bastion host` em uma falha de segurança.
+
+Para habilitar o `bastion host` seguindo as melhores práticas, é preciso atender alguns requisitos:
+
+1. Tanto o `bastion host` quando a insância privada deve possuir um `par de chaves` para acesso via `SSH`
+2. O `bastion host` precisa ser acessível externamente
+3. Configure os security groups, como no exemplo:
+  * Bastion Host:
+    * nome: ssh-bastion
+    * inbound:
+      * tipo: SSH
+      * porta: 22
+      * origem: 0.0.0.0/0
+    * outbound:
+      * tipo: SSH
+      * porta: 22
+      * destino: ssh
+  * EC2 privada:
+    * nome: ssh
+    * inbound:
+      * tipo: SSH
+      * porta: 22
+      * origem: ssh-bastion
+
+Após acessar o `Bastion Host`, adicione o código abaixo ao arquivo utilizando o comando `vi ~/.ssh/config`:
+```bash
+Host bastion-host
+HostName <Public IP address of Bastion Host>
+User ec2-user
+Port 22
+IdentityFile ~/.ssh/<key pair>
+IdentitiesOnly yes
+Host private-ec2
+HostName <Private IP address of private EC2 instance>
+User ec2-user
+Port 22
+IdentityFile ~/.ssh/<key pair>
+IdentitiesOnly yes
+ProxyJump bastion-host
+```
+Não se esqueça de alterar os valores entre `<>` com os seus próprios valores. Isso fará com que seu `bastion host` esteja devidamente configurado para estabelecer a conexão com sua `EC2` privada.
 
 ---
 
@@ -169,7 +209,7 @@ Assim como no `RDS`, garanta que os security groups das `EC2` e do `EFS` estejam
   * inbound:
     * tipo: NFS
     * porta: 2049
-    * destino: ec2-efs-1
+    * origem: ec2-efs-1
 
 No script fornecido para a inicialização da `EC2`, o volume do `Wordpress` já havia sido direcionado para o diretório de montagem do `EFS`.
 
@@ -206,7 +246,7 @@ Atenção aos security groups do `Load Balancer` e das instâncias `EC2`, após 
     * regra 1:
       * tipo: HTTP
       * porta: 80
-      * destino: 0.0.0.0/0
+      * origem: 0.0.0.0/0
     * regra 2:
       * tipo: HTTPS
       * porta: 443
@@ -227,7 +267,7 @@ Atenção aos security groups do `Load Balancer` e das instâncias `EC2`, após 
     * regra 1:
       * tipo: HTTP
       * porta: 80
-      * destino: loadbalancer
+      * origem: loadbalancer
     * regra 2:
       * tipo: HTTPS
       * porta: 443
@@ -249,7 +289,7 @@ O Load Balancer que foi utilizado é o `Classic Load Balancer`, que checa a inte
 
 Para corrigir isso é muito simples, basta acessar o container do `Wordpress` utilizando `docker exec -it <CONTAINER_ID>` e criar um endpoint para ser o nosso `health check`, que deve retornar código 200 na verificação.
 
-Primeiramente devemos subir e acessar uma das instâncias EC2, e utilizar o comando `docker ps` para pegar o código do container Wordpress. Então acessamos o container e vemos o conteúdo dele
+Primeiramente devemos subir e acessar uma das instâncias EC2, e utilizar o comando `docker ps` para pegar o ID do container `Wordpress`. Então acessamos o container e vemos o conteúdo dele
 
 <div align="center"><img src="./images/image12.png"></div>
 
@@ -317,34 +357,32 @@ function _dirIsValidAndNotEmpty($dir) {
 
 Este código checa a integridade da apicação conferindo os arquivos do `Wordpress`. Se o `Wordpress` não for instalado, então ele retornará o código `404 Not Found` em loop, até encontrar os arquivos de configuração, assim retornando um código `200 OK` na requisição
 
-<div align="center"><img src="./images/image13.png"></div>
-
 Saindo do container, podemos ver que o arquivo foi salvo no `EFS`
 
-<div align="center"><img src="./images/image14.png"></div>
+<div align="center"><img src="./images/image13.png"></div>
 
 Checamos o novo endpoint fazendo uma requisição para outra `EC2` que também está rodando o `Wordpress`, e podemos ver que está retornando o código 200
 
-<div align="center"><img src="./images/image15.png"></div>
+<div align="center"><img src="./images/image14.png"></div>
 
 **Auto Scaling Group**
 
 Com o `Load Balancer` devidamente configurado, ele deve ser atribuído a um `Auto Scaling Group`, com as seguintes configurações abaixo:
 
-* Tamanho do grupo
+* Tamanho do grupo:
   * Capacidade desejada: 2
   * Capacidade mínima desejada: 2
   * Capacidade máxima desejada: 2
-* Modelo de execução
+* Modelo de execução:
   * Modelo de execução: ActivDockerAws
   * Versão: default
-* Rede
+* Rede:
   * Zonas de disponibilidade e sub-redes:
     * ActivDockerAws-subnet-private1-us-east-1a
     * ActivDockerAws-subnet-private2-us-east-1b
-* Balanceamento de carga
+* Balanceamento de carga:
   * Classic Load Balancers: ActivDockerAws
-* Verificações de integridade
+* Verificações de integridade:
   * Ative as verificações de integridade do Elastic Load Balancing
 
 O resto das configurações se mantém no valor padrão.
@@ -353,7 +391,7 @@ Após finalizar o `Auto Scaling Group`, basta esperar para que ele providencie a
 
 Passados alguns minutos, retornamos ao `Load Balancer` e conferimos as instâncias que foram cadastradas pelo `Auto Scaling Group`:
 
-<div align="center"><img src="./images/image16.png"></div>
+<div align="center"><img src="./images/image15.png"></div>
 
 **Bônus: como atualizar o host name do Wordpress**
 
