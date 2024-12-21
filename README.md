@@ -7,7 +7,7 @@ Atividade na qual deve ser criada uma aplicação baseada na arquitetura propost
 <div align="center"><img src="./images/title-image.png"></div>
 
 ## Arquitetura proposta
-<div align=center><img src="./images/image1.png"></div>
+<div align=center><img src="./images/image0.png"></div>
 Obeservando a imagem acima, é possível determinar os requerimentos da arquitetura, que são estes:
 
 1. VPC
@@ -22,7 +22,7 @@ Como pode ser visto na arquitetura, será necessário criar o alicerce para que 
 
 O que deve ser criado antes de tudo é a VPC, que será a base para montarmos um sistema de redes. Abaixo está o esquema de subnets, route tables e gateways:
 
-<div align=center><img src="./images/image2.png"></div>
+<div align=center><img src="./images/image1.png"></div>
 
 Aqui temos 4 `subnets`, 2 para cada availability zone. 2 públicas para transferencia de dados entre o `Load Balancer` e a internet, e 2 privadas para transferencia de dados entre as `EC2` e o `Load Balancer`.
 
@@ -30,7 +30,11 @@ As `subnets` estão ligadas em suas respectivas `tabelas de rotas`.
 
 A tabela de rotas pública está associada ao `Internet Gateway`, para que o `Load Balancer` possa ter acesso à internet. E a tabela de rotas privada está associada ao `NAT Gateway`, para rotear acesso à internet para as instâncias `EC2`, que estão em subnets privadas.
 
-O `NAT Gateway` precisa estar associado à uma `subnet pública` e possuir um `IP Elástico` para funcionar corretamente.
+**NAT Gateway**
+
+O `NAT Gateway` precisa estar associado à uma `subnet pública` e possuir um `IP Elástico` para funcionar corretamente, desta forma:
+
+<div align=center><img src="./images/image2.png"></div>
 
 ---
 
@@ -175,6 +179,7 @@ User ec2-user
 Port 22
 IdentityFile ~/.ssh/<key pair>
 IdentitiesOnly yes
+
 Host private-ec2
 HostName <Private IP address of private EC2 instance>
 User ec2-user
@@ -183,7 +188,9 @@ IdentityFile ~/.ssh/<key pair>
 IdentitiesOnly yes
 ProxyJump bastion-host
 ```
-Não se esqueça de alterar os valores entre `<>` com os seus próprios valores. Isso fará com que seu `bastion host` esteja devidamente configurado para estabelecer a conexão com sua `EC2` privada.
+Não se esqueça de alterar os valores entre `<>` com os seus próprios valores. Isso fará com que seu `bastion host` esteja devidamente configurado para estabelecer a conexão com sua `EC2` privada, utilizando proxy jump.
+
+Para acessar a `EC2 privada`, utilize o comando `ssh private-ec2`
 
 ---
 
