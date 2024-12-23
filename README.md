@@ -38,8 +38,82 @@ O `NAT Gateway` precisa estar associado à uma `subnet pública` e possuir um `I
 
 ---
 
-### 1. instalação e configuração do DOCKER ou CONTAINERD no host EC2
-* Ponto adicional para o trabalho utilizar a instalação via script de Start Instance (user_data.sh)
+### RDS database com MySQL
+
+Antes de partir para as instâncias `EC2`, precisamos preparar as suas dependências, que serão o banco de dados MySQL utilizando `RDS` e o sistema de arquivos com `EFS`.
+
+Não esqueça de utilizar a opção `Nome do banco de dados inicial`, na seção `Configuração adicional`, como segue na imagem abaixo. Ela é importante pra criar o banco de dados que será o valor da variável `WORDPRESS_DB_NAME`. Sem este banco de dados, o `Wordpress` é incapaz de funcionar corretamente, mas também é possível criar este banco de dados manualmente acessando a instância e utilizando um cliente do MySQL.
+
+<div align="center"><img src="./images/image5.png"></div>
+
+**Resumo do RDS:**
+<div align="center"><img src="./images/image4.png"></div>
+
+Garanta que os security groups das `EC2` e do `RDS` estejam bem configurados:
+
+* EC2:
+  * nome: ec2-rds
+  * outbound:
+    * tipo: MYSQL/Aurora
+    * porta: 3306
+    * destino: rds-ec2
+* RDS:
+  * nome: rds-ec2
+  * inbound:
+    * tipo: MYSQL/Aurora
+    * porta: 3306
+    * origem: ec2-rds
+
+---
+
+### EFS
+
+É necessário criar um EFS para que a aplicação `Wordpress` mantenha consistência. Como a arquitetura possui redundância em diferentes zonas de disponibilidade, é preciso garantir que os arquivos possuem uma mesma origem, para que não existam conflitos entre as aplicações `Wordpress`.
+
+**Resumo do EFS**
+<div align="center"><img src="./images/image6.png"></div>
+
+Para anexar o `EFS`, basta utilizar o comando de montagem na instância `EC2`. Neste caso, foi utilizado o cliente do NFS.
+
+<div align="center"><img src="./images/image7.png"></div>
+
+Assim como no `RDS`, garanta que os security groups das `EC2` e do `EFS` estejam bem configurados.
+
+* EC2:
+  * nome: ec2-efs-1
+  * outbound:
+    * tipo: NFS
+    * porta: 2049
+    * destino: efs-ec2-1
+* EFS:
+  * nome: efs-ec2-1
+  * inbound:
+    * tipo: NFS
+    * porta: 2049
+    * origem: ec2-efs-1
+
+No script fornecido para a inicialização da `EC2`, o volume do `Wordpress` já havia sido direcionado para o diretório de montagem do `EFS`.
+
+Futuramente, caso queira conferir a conexão entre o `Wordpress` e o `EFS` depois de ter feito as `EC2`, basta apenas checar as métricas do `EFS`.
+
+<div align="center"><img src="./images/image8.png"></div>
+
+Aqui podemos ver nas métricas do `EFS`, que foi realizada uma conexão, e essa conexão foi justamente a `EC2` que contém o conteiner do `Wordpress`
+
+Uma outra maneira mais interessante de checar o funcionamento do `EFS` é criando um arquivo em uma instância `EC2`, e ver se o arquivo também foi criado na montagem de outra `EC2`
+
+```bash
+sudo touch /mnt/efs/test-file
+```
+**EC2 1**
+<div align="center"><img src="./images/image9.png"></div>
+
+**EC2 2**
+<div align="center"><img src="./images/image10.png"></div>
+
+---
+
+### EC2
 
 Primeiramente, devem ser criadas as instâncias EC2, que partirão de um modelo de instância, no qual foram utilizadas as seguintes especificações:
 
@@ -110,42 +184,13 @@ Este script faz as seguintes tarefas:
 10. Realiza a montagem do volume do `EFS` que será acessado pelo `Wordpress`
 11. Executa o `docker-compose`, subindo o container do `Wordpress` na porta 80
 
----
-
-<h3>2. Efetuar Deploy de uma aplicação Wordpress com:<br>
-• container de aplicação<br>
-• RDS database Mysql</h3>
-
 O deploy do container de aplicação é efetuado assim que a instância entra em execução, aqui estão os logs do `Wordpress` recém criado.
 
 <div align="center"><img src="./images/image3.png"></div>
 
-**RDS database com MySQL**
-
-<div align="center"><img src="./images/image4.png"></div>
-
-Garanta que os security groups das `EC2` e do `RDS` estão bem configurados:
-
-* EC2:
-  * nome: ec2-rds
-  * outbound:
-    * tipo: MYSQL/Aurora
-    * porta: 3306
-    * destino: rds-ec2
-* RDS:
-  * nome: rds-ec2
-  * inbound:
-    * tipo: MYSQL/Aurora
-    * porta: 3306
-    * origem: ec2-rds
-
-**RDS conectado com as EC2**
-
-<div align="center"><img src="./images/image5.png"></div>
-
 **Bastion Host**
 
-Caso haja algum problema dentro das instâncias, deve ser criado um `bastion host`. Um `bastion host` nada mais é do que uma intância com acesso público, que será a intermediadora para realizar o acesso via `SSH` às `EC2` da aplicação, que por sua vez estão protegidas em `subnets privadas`.
+Caso haja algum problema dentro das instâncias, deve ser criado um `bastion host` para ser possível acessá-las. Um `bastion host` nada mais é do que uma intância com acesso público, que será a intermediadora para realizar o acesso via `SSH` às `EC2` da aplicação, que por sua vez estão protegidas em `subnets privadas`.
 
 É importante salientar que o `bastion host` deve ter todas as precauções de segurança, visto que ele está exposto para acesso externo. Então utilize as melhores práticas de segurança para não tornar o `bastion host` em uma falha de segurança.
 
@@ -194,52 +239,7 @@ Para acessar a `EC2 privada`, utilize o comando `ssh private-ec2`
 
 ---
 
-### 3. Configuração da utilização do serviço EFS AWS para arquivos estáticos do container de aplicação Wordpress
-
-**Elastic FIle System (EFS)**
-<div align="center"><img src="./images/image6.png"></div>
-
-Para anexar o `EFS`, basta utilizar o comando de montagem na instância `EC2`. Neste caso, foi utilizado o cliente do NFS.
-
-<div align="center"><img src="./images/image7.png"></div>
-
-Assim como no `RDS`, garanta que os security groups das `EC2` e do `EFS` estejam bem configurados.
-
-* EC2:
-  * nome: ec2-efs-1
-  * outbound:
-    * tipo: NFS
-    * porta: 2049
-    * destino: efs-ec2-1
-* EFS:
-  * nome: efs-ec2-1
-  * inbound:
-    * tipo: NFS
-    * porta: 2049
-    * origem: ec2-efs-1
-
-No script fornecido para a inicialização da `EC2`, o volume do `Wordpress` já havia sido direcionado para o diretório de montagem do `EFS`.
-
-Para conferir a conexão entre o `Wordpress` e o `EFS`, basta apenas checar as métricas do `EFS`.
-
-<div align="center"><img src="./images/image8.png"></div>
-
-Aqui podemos ver nas métricas do `EFS`, que foi realizada uma conexão, e essa conexão foi justamente a `EC2` que contém o conteiner do `Wordpress`
-
-Uma outra maneira mais interessante de checar o funcionamento do `EFS` é criando um arquivo em uma instância `EC2`, e ver se o arquivo também foi criado na montagem de outra `EC2`
-
-```bash
-sudo touch /mnt/efs/test-file
-```
-**EC2 1**
-<div align="center"><img src="./images/image9.png"></div>
-
-**EC2 2**
-<div align="center"><img src="./images/image10.png"></div>
-
----
-
-### 4. Configuração do serviço de Load Balancer AWS para a aplicação Wordpress
+### Load Balancer
 
 Com a aplicação `Wordpress` rodando e corretamente integrada ao RDS e EFS, chegou o momento configurar um `Load Balancer`.
 
