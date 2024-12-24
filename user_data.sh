@@ -34,7 +34,21 @@ services:
 EOF
 
 sudo mkdir -p /mnt/efs
-
 sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport <EFS_ID>.efs.us-east-1.amazonaws.com:/ /mnt/efs
 
-docker-compose -f /app/compose.yml up -d
+cat <<EOF | sudo tee /etc/systemd/system/wordpress-container.service
+[Unit]
+Description=WordPress Docker Container
+After=docker.service
+Requires=docker.service
+
+[Service]
+Restart=always
+ExecStart=/usr/local/bin/docker-compose -f /app/compose.yml up -d
+ 
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable wordpress-container.service
+sudo systemctl start wordpress-container.service

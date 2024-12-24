@@ -157,19 +157,33 @@ services:
     ports:
       - 80:80
     environment:
-      WORDPRESS_DB_HOST: <RDS_ENDPOINT>
-      WORDPRESS_DB_USER: <RDS_USER>
-      WORDPRESS_DB_PASSWORD: <RDS_PASSWORD>
-      WORDPRESS_DB_NAME: <RDS_DATABASE>
+      WORDPRESS_DB_HOST: activdockeraws.crwgcqugmfcm.us-east-1.rds.amazonaws.com
+      WORDPRESS_DB_USER: admin
+      WORDPRESS_DB_PASSWORD: Xdbt5cwA5bsyDE6
+      WORDPRESS_DB_NAME: activdockeraws
     volumes:
       - /mnt/efs:/var/www/html
 EOF
 
 sudo mkdir -p /mnt/efs
+sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport fs-0ddd8bbf4b6ec53c6.efs.us-east-1.amazonaws.com:/ /mnt/efs
 
-sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport <EFS_ID>.efs.us-east-1.amazonaws.com:/ /mnt/efs
+cat <<EOF | sudo tee /etc/systemd/system/wordpress-container.service
+[Unit]
+Description=WordPress Docker Container
+After=docker.service
+Requires=docker.service
 
-docker-compose -f /app/compose.yml up -d
+[Service]
+Restart=always
+ExecStart=/usr/local/bin/docker-compose -f /app/compose.yml up -d
+ 
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable wordpress-container.service
+sudo systemctl start wordpress-container.service
 ```
 Este script faz as seguintes tarefas:
 1. Atualiza os pacotes do sistema
@@ -182,7 +196,8 @@ Este script faz as seguintes tarefas:
 8. Cria o `compose.yml`, que contém as instruções para subir o container do `Wordpress`
 9. Cria o diretório de montagem para o `EFS`
 10. Realiza a montagem do volume do `EFS` que será acessado pelo `Wordpress`
-11. Executa o `docker-compose`, subindo o container do `Wordpress` na porta 80
+11. Cria o arquivo do serviço `wordpress-container`
+12. Habilita e inicializa o serviço `wordpress-container`
 
 O deploy do container de aplicação é efetuado assim que a instância entra em execução, aqui estão os logs do `Wordpress` recém criado.
 
@@ -395,7 +410,7 @@ Passados alguns minutos, retornamos ao `Load Balancer` e conferimos as instânci
 
 <div align="center"><img src="./images/image15.png"></div>
 
-**Bônus: como atualizar o host name do Wordpress**
+### Bônus: como atualizar o host name do Wordpress
 
 O `Wordpress` armazena o host name do `Load Balancer` quando ele é instalado, e redireciona as requisições para este host name, como o endpoint de `/login` por exemplo. Se o `Load Balancer` não possuir um domínio, então o seu host name será o DNS fornecido pela `AWS`. Porém se o `Load Balancer` original for derrubado, e criado um novo, o `Wordpress` continuará redirecionando para o DNS antigo, pois ele foi salvo como o host name nas configurações do `Wordpress`.
 
@@ -428,3 +443,11 @@ Agora o `DNS` de novos `Load Balancers` serão atribuídos às URLs do Wordpress
 **Finalização**
 
 Após executar todos estes passos, temos uma aplicação `Wordpress` resiliente e escalável, com servidores em múltiplas zonas de disponibilidade, telorância à falhas, balanceamento de carga, banco de dados elástico e sistema de arquivos em nuvem.
+
+**Tela de instalação do WordPress**
+
+<div align=center><img src="./images/image16.png"></div>
+
+**Dashboard do Wordpress**
+
+<div align=center><img src="./images/image17.png"></div>
