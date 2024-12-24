@@ -196,7 +196,7 @@ Caso haja algum problema dentro das instâncias, deve ser criado um `bastion hos
 
 Para habilitar o `bastion host` seguindo as melhores práticas, é preciso atender alguns requisitos:
 
-1. Tanto o `bastion host` quando a insância privada deve possuir um `par de chaves` para acesso via `SSH`
+1. Tanto o `bastion host` quando a insância privada devem possuir um `par de chaves` para realizar um acesso via `SSH` com segurança
 2. O `bastion host` precisa ser acessível externamente
 3. Configure os security groups, como no exemplo:
   * Bastion Host:
@@ -216,26 +216,21 @@ Para habilitar o `bastion host` seguindo as melhores práticas, é preciso atend
       * porta: 22
       * origem: ssh-bastion
 
-Após acessar o `Bastion Host`, adicione o código abaixo ao arquivo utilizando o comando `vi ~/.ssh/config`:
+Para acessar a instância privada após ter acessado o `bastion host`, será necessário adicionar a chave de acesso dentro do `bastion host` (ela foi baixada localmente no momento de sua criação).
+
+Que basicamente consiste em criar um arquivo `.pem` utilizando `vi key.pem`, copiar e colar a chave da instância privada dentro dele (a extensão da chave pode ser alterada para `.txt` para realizar a cópia, caso não consiga acessá-la com a extensão `.pem`)
+
+Criado o arquivo, é necessário editar suas permissões, basta utilizar o seguinte comando:
 ```bash
-Host bastion-host
-HostName <Public IP address of Bastion Host>
-User ec2-user
-Port 22
-IdentityFile ~/.ssh/<key pair>
-IdentitiesOnly yes
-
-Host private-ec2
-HostName <Private IP address of private EC2 instance>
-User ec2-user
-Port 22
-IdentityFile ~/.ssh/<key pair>
-IdentitiesOnly yes
-ProxyJump bastion-host
+sudo chmod 400 key.pem
 ```
-Não se esqueça de alterar os valores entre `<>` com os seus próprios valores. Isso fará com que seu `bastion host` esteja devidamente configurado para estabelecer a conexão com sua `EC2` privada, utilizando proxy jump.
 
-Para acessar a `EC2 privada`, utilize o comando `ssh private-ec2`
+Após inserir a chave da instância privada no `bastion host`, basta executar um comando parecido com o utilizado para acessar o próprio `bastion host`:
+```bash
+ssh -i key.pem <PRIVATE_EC2_USER>@<PRIVATE_EC2_PRIVATE_IP>
+```
+
+Atente-se ao diretório em que foi salva a chave de acesso. Após este comando, a `EC2` privada deverá ser acessada sem problemas, desde que tudo tenha sido feito corretamente. 
 
 ---
 
