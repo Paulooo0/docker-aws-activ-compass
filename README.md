@@ -199,6 +199,8 @@ Este script faz as seguintes tarefas:
 11. Cria o arquivo do serviço `wordpress-container`
 12. Habilita e inicializa o serviço `wordpress-container`
 
+Com esse script, a aplicação `Wordpress` é iniciada no momento do lançamento da instância, e com o uso do serviço `wordpress-container`, um novo container `Wordpress` será levantado caso a instância seja reinicializada.
+
 O deploy do container de aplicação é efetuado assim que a instância entra em execução, aqui estão os logs do `Wordpress` recém criado.
 
 <div align="center"><img src="./images/image3.png"></div>
